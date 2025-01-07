@@ -53,9 +53,13 @@ export const PROXY_SOURCES = [
 npm install
 
 # Run the script
-node index.js
+npm run start
 
 ```
+
+## 🚀 Interface
+
+<img src="assets/checker.png" />
 
 ## 📊 Output
 
