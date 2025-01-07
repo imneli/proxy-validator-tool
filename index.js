@@ -12,7 +12,9 @@ export const PROXY_SOURCES = [
     "example.com/proxies.txt",
 ];
 
-// packup sources (in case the main sources fail, these will be used) //  fontes de backup (caso as fontes principais falhem, essas serão usadas)
+export const PROXY_FILES_FOLDER = 'proxy-lists';
+
+// backup sources
 export const BACKUP_PROXY_SOURCES = [
     "https://www.proxyscan.io/download?type=http",
     "https://www.proxyscan.io/download?type=https",
@@ -65,6 +67,47 @@ export class ProxyValidator {
         return emojiMap[type] || '';
     }
 
+    async readProxiesFromFile(filePath) {
+        try {
+            const content = await fs.readFile(filePath, 'utf-8');
+            const proxyRegex = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)/g;
+            const proxies = new Set();
+            let match;
+
+            const lines = content.split('\n');
+            for (const line of lines) {
+                while ((match = proxyRegex.exec(line)) !== null) {
+                    proxies.add(`${match[1]}:${match[2]}`);
+                }
+            }
+
+            this._log(`Collected ${proxies.size} proxies from file ${filePath}`, 'success');
+            return proxies;
+        } catch (error) {
+            this._log(`Error reading file ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+            return new Set();
+        }
+    }
+
+    async readAllProxyFiles() {
+        try {
+            await fs.mkdir(PROXY_FILES_FOLDER, { recursive: true });
+            
+            const files = await fs.readdir(PROXY_FILES_FOLDER);
+            const txtFiles = files.filter(file => file.endsWith('.txt'));
+            
+            for (const file of txtFiles) {
+                const filePath = path.join(PROXY_FILES_FOLDER, file);
+                const proxies = await this.readProxiesFromFile(filePath);
+                proxies.forEach(proxy => this.allProxies.add(proxy));
+            }
+            
+            this._log(`Finished reading proxies from ${txtFiles.length} local files`, 'success');
+        } catch (error) {
+            this._log(`Error reading proxy files: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }
+
     async fetchFromSource(source) {
         try {
             const response = await this.axiosInstance.get(source);
@@ -104,11 +147,15 @@ export class ProxyValidator {
 
     async fetchAllProxies() {
         this._log('Starting to collect proxies from all sources...');
+        
+        await this.readAllProxyFiles();
+
         const fetchPromises = PROXY_SOURCES.map(source => this.fetchFromSource(source));
         const results = await Promise.all(fetchPromises);
         results.forEach(proxySet => {
             proxySet.forEach(proxy => this.allProxies.add(proxy));
         });
+        
         this._log(`Total proxies collected: ${this.allProxies.size}`, 'success');
     }
 
@@ -209,7 +256,7 @@ export class ProxyValidator {
 }
 
 (async () => {
-    const discordWebhook = process.env.DISCORD_WEBHOOK || 'YOUR_WEBHOOK_HERE'; // replace with your webhook or add it to .env! // mude para seu webhook ou adicione ao .env
+    const discordWebhook = process.env.DISCORD_WEBHOOK || 'YOUR_WEBHOOK_HERE';
     const validator = new ProxyValidator(discordWebhook);
     await validator.fetchAllProxies();
     await validator.validateProxies();
