@@ -70,9 +70,6 @@ proxy-validator/
 ## 💻 Usage
 
 ```bash
-# Run with default settings
-npm install
-
 # Run the script
 npm run start
 ```
